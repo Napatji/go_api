@@ -1,20 +1,52 @@
 package main
 
 import (
-	account "api/accounts"
-	"api/transactions"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	_ "github.com/lib/pq"
+
+	account "api/accounts"
+	"api/transactions"
+)
+
+const (
+	host     = "postgres"
+	port     = 5432
+	user     = "postgres"
+	password = "password"
+	dbname   = "postgres"
 )
 
 func main() {
+	//Setup Go-Chi router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+
+	//Setup database connection string
+	postgreSQL := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+
+	//Get connection pointer to database
+	db, err_db := sql.Open("postgres", postgreSQL)
+	if err_db != nil {
+		panic(err_db)
+	}
+	defer db.Close() // Delay closing database connection
+
+	//Open a connection to database
+	err_open := db.Ping()
+	if err_open != nil {
+		panic(err_open)
+	}
+	fmt.Println("Open connection succes")
+
+	//Mockup Data
 	accList := account.AccountList
 	acc1 := account.Account{}
 	acc1.SetAccount("1234567890", "John Doe", "john@example.com", 500)
@@ -22,9 +54,8 @@ func main() {
 	acc2.SetAccount("1234567891", "Jane Smith", "jane@example.com", 1000)
 	accList = append(accList, acc1)
 	accList = append(accList, acc2)
-
 	transList := transactions.TransactionList
-	// transList = append(transList, )
+	/* transList = append(transList, ) */
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("welcome"))
@@ -32,6 +63,7 @@ func main() {
 
 	//--------------------Account--------------------//
 	r.Get("/accounts", func(w http.ResponseWriter, r *http.Request) {
+		// db.Query()
 		val, _ := json.Marshal(accList)
 		w.Write([]byte(val))
 	})
@@ -241,5 +273,6 @@ func main() {
 		}
 	})
 
+	fmt.Println("Server Started")
 	http.ListenAndServe(":3000", r)
 }
