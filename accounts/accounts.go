@@ -6,8 +6,8 @@ var AccountList []Account
 
 type Account struct {
 	Account_id string `json:"account_id"`
-	Name       string `json:"name"`
-	Email      string `json:"email"`
+	Name       string `json:"account_name"`
+	Email      string `json:"account_email"`
 	Balance    int64  `json:"balance"`
 }
 

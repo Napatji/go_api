@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
+	_ "golang.org/x/text/number"
 
 	account "api/accounts"
 	"api/transactions"
@@ -48,14 +49,7 @@ func main() {
 
 	//Mockup Data
 	accList := account.AccountList
-	acc1 := account.Account{}
-	acc1.SetAccount("1234567890", "John Doe", "john@example.com", 500)
-	acc2 := account.Account{}
-	acc2.SetAccount("1234567891", "Jane Smith", "jane@example.com", 1000)
-	accList = append(accList, acc1)
-	accList = append(accList, acc2)
 	transList := transactions.TransactionList
-	/* transList = append(transList, ) */
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("welcome"))
@@ -63,41 +57,108 @@ func main() {
 
 	//--------------------Account--------------------//
 	r.Get("/accounts", func(w http.ResponseWriter, r *http.Request) {
-		// db.Query()
-		val, _ := json.Marshal(accList)
+		// Create account list
+		accListData := account.AccountList
+
+		// Get all row in accounts table
+		queryStr := "SELECT * FROM accounts;"
+		rows, err := db.Query(queryStr)
+		if err != nil {
+			panic(err)
+		}
+		defer rows.Close()
+
+		// Iterate over rows
+		for rows.Next() {
+			var account_id, account_name, account_email string
+			var balance int64
+			if err := rows.Scan(&account_id, &account_name, &account_email, &balance); err != nil {
+				panic(err)
+			}
+			acc := account.Account{}
+			acc.SetAccount(account_id, account_name, account_email, balance) // add to struct
+			accListData = append(accListData, acc)                           // add account struct to list
+		}
+
+		// Check for errors from iterating over rows
+		if err := rows.Err(); err != nil {
+			panic(err)
+		}
+
+		// Convert account list to json
+		val, _ := json.Marshal(accListData)
 		w.Write([]byte(val))
 	})
 
 	r.Get("/accounts/{account_id}", func(w http.ResponseWriter, r *http.Request) {
+		// Get param from url
 		accountId := chi.URLParam(r, "account_id")
-		var selectAcc account.Account
 
-		for _, acc := range accList {
-			if acc.Account_id == accountId {
-				selectAcc = acc
-			}
+		// Query for a value based on a single row.
+		queryStr := fmt.Sprintf(`SELECT * from accounts WHERE account_id = '%s';`, accountId)
+		row := db.QueryRow(queryStr)
+		var account_id, account_name, account_email string
+		var balance int64
+
+		// Check for errors from row
+		if err := row.Scan(&account_id, &account_name, &account_email, &balance); err != nil {
+			panic(err)
 		}
 
-		val, _ := json.Marshal(selectAcc)
+		// Set data
+		acc := account.Account{}
+		acc.SetAccount(account_id, account_name, account_email, balance) // add to struct
 
+		// Convert account list to json
+		val, _ := json.Marshal(acc)
 		w.Write([]byte(val))
 	})
 
 	r.Post("/accounts", func(w http.ResponseWriter, r *http.Request) {
+		// Get body from user
 		body, err := io.ReadAll(r.Body)
-		if err == nil {
-			postAcc := account.Account{}
-			postAcc.Account_id = account.GetNextId(accList)
-			json.Unmarshal(body, &postAcc)
-
-			accList = append(accList, postAcc)
-
-			val, _ := json.Marshal(postAcc)
-
-			w.Write([]byte(val))
-		} else {
-			w.Write([]byte("Failed"))
+		if err != nil {
+			w.Write([]byte("Invalid body requested..."))
 		}
+
+		// Create account list
+		accListData := account.AccountList
+
+		// Get all row in accounts table
+		queryStr := "SELECT * FROM accounts;"
+		rows, err := db.Query(queryStr)
+		if err != nil {
+			panic(err)
+		}
+		defer rows.Close()
+
+		// Iterate over rows
+		for rows.Next() {
+			var account_id, account_name, account_email string
+			var balance int64
+			if err := rows.Scan(&account_id, &account_name, &account_email, &balance); err != nil {
+				panic(err)
+			}
+			acc := account.Account{}
+			acc.SetAccount(account_id, account_name, account_email, balance) // add to struct
+			accListData = append(accListData, acc)                           // add account struct to list
+		}
+
+		// Check for errors from iterating over rows
+		if err := rows.Err(); err != nil {
+			panic(err)
+		}
+
+		postAcc := account.Account{}
+		postAcc.Account_id = account.GetNextId(accListData)
+		json.Unmarshal(body, &postAcc)
+
+		queryStr2 := fmt.Sprintf(`INSERT INTO accounts (account_id, account_name, account_email, balance) VALUES ('%s', '%s', '%s', 0);`, postAcc.Account_id, postAcc.Name, postAcc.Email)
+		db.Exec(queryStr2)
+		val, _ := json.Marshal(postAcc)
+
+		w.Write([]byte(val))
+
 	})
 
 	r.Put("/accounts/{account_id}", func(w http.ResponseWriter, r *http.Request) {
